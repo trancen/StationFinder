@@ -1,0 +1,1572 @@
+<!--
+  WebSocket StationFinder v1.0
+  Copyright (c) 2026 Roger Need
+
+  This program is free software: you can redistribute it and/or
+  modify it under the terms of the GNU General Public License as
+  published by the Free Software Foundation, either version 3 of
+  the License, or (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+  GNU General Public License for more details.
+
+  You must keep this copyright notice and license header in all
+  copies or substantial portions of the code. You must release any
+  modifications or derivative works under the same license
+  (GPLv3 or later).
+
+  Refer to the GNU General Public License for licensing details.
+  <https://www.gnu.org/licenses/gpl-3.0.html>
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>StationFinder v1.0</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --panel: #161b22;
+      --text: #e6e6e6;
+      --text-dim: #e6e6e6;
+      --border: #30363d;
+      --header-bg: #1a5276;
+      --header-text: #e6e6e6;
+      --button-bg: #1a5276;
+      --button-hover: #0277bd;
+      --search-bg: #1c2128;
+      --search-border: #373e47;
+      --status: #80cbc4;
+      --row-hover: #1c2d3f;
+      --row-even: #161b22;
+      --tag-bg: #0d2135;
+      --tag-text: #60b8e0;
+      --tag-green-bg: #0d2a1a;
+      --tag-green-text: #4cc990;
+      --tag-red-bg: #2a0d0d;
+      --tag-red-text: #e06060;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      font-size: 1rem;
+      background: var(--bg);
+      color: var(--text);
+      padding: 16px 20px;
+    }
+
+    /* Subtle scanline overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(255,255,255,0.015) 2px, rgba(255,255,255,0.015) 4px
+      );
+      pointer-events: none;
+      z-index: 999;
+    }
+
+    /* ── Top bar ── */
+    .topbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .spacer { flex: 1; }
+
+    .file-btn {
+      padding: 0 14px 2px 14px;
+      height: 32px;
+      box-sizing: border-box;
+      background: var(--search-bg);
+      color: #e6e6e6;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.95em;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    #fileInput { display: none; }
+
+    /* ── Search row ── */
+    .search-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+      flex-wrap: wrap;
+    }
+
+    .search-label {
+      color: var(--text-dim);
+      white-space: nowrap;
+      position: relative;
+      top: -2px;
+    }
+
+    #searchBox {
+      padding: 0 8px 4px 8px;
+      height: 32px;
+      box-sizing: border-box;
+      border: 1px solid var(--search-border);
+      background: var(--search-bg);
+      color: var(--text);
+      border-radius: 4px;
+      width: 165px;
+      font-family: inherit;
+      font-size: 1em;
+      transition: none;
+    }
+    #stationBox {
+      padding: 0 8px 4px 8px;
+      height: 32px;
+      box-sizing: border-box;
+      border: 1px solid var(--search-border);
+      background: var(--search-bg);
+      color: var(--text);
+      border-radius: 4px;
+      width: 140px;
+      font-family: inherit;
+      font-size: 1em;
+      transition: none;
+    }
+    #searchBox:focus, #stationBox:focus {
+      outline: none;
+    }
+
+    .filter-select {
+      padding: 0 8px 4px 8px;
+      height: 32px;
+      box-sizing: border-box;
+      border: 1px solid var(--border);
+      background: var(--search-bg);
+      color: var(--text-dim);
+      border-radius: 4px;
+      cursor: pointer;
+      outline: none;
+      font-family: inherit;
+      font-size: 1em;
+    }
+
+    .mode-tabs { display: flex; gap: 5px; }
+    .mode-tab {
+      padding: 0 12px 4px 12px;
+      height: 32px;
+      box-sizing: border-box;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background: var(--search-bg);
+      color: var(--text-dim);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 1em;
+      transition: all 0.15s;
+    }
+    .mode-tab.active {
+      border-color: var(--button-bg);
+      color: var(--text-dim);
+      background: var(--button-bg);
+      font-weight: 400;
+    }
+
+    /* ── Status bar ── */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      color: var(--status);
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      padding: 2px 10px;
+      border-radius: 10px;
+      font-weight: 400;
+      background: var(--tag-bg);
+      color: var(--tag-text);
+    }
+    .pill.green { background: var(--tag-green-bg); color: var(--tag-green-text); }
+    .pill.red   { background: var(--tag-red-bg);   color: var(--tag-red-text); }
+
+    /* ── Table wrapper ── */
+    .table-wrap {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      background: var(--panel);
+    }
+
+    table { border-collapse: collapse; width: 100%; }
+
+    thead { display: table; width: 100%; table-layout: fixed; }
+    tbody {
+      display: block;
+      overflow-y: auto;
+      max-height: calc(100vh - 200px);
+    }
+    tbody tr { display: table; width: 100%; table-layout: fixed; }
+
+    /* Column widths - centered by default from th,td rule */
+    th:nth-child(1),  td:nth-child(1)  { width: 5%; text-align: center; padding-left: 8px; padding-right: 8px; }  /* Frequency */
+    th:nth-child(2),  td:nth-child(2)  { width: 3%; text-align: center; padding-left: 8px; padding-right: 8px; }  /* Mode */
+    th:nth-child(4),  td:nth-child(4)  { width: 4%; text-align: center; padding-left: 8px; padding-right: 8px; }  /* On */
+    th:nth-child(5),  td:nth-child(5)  { width: 4%; text-align: center; padding-left: 8px; padding-right: 8px; }  /* Off */
+    th:nth-child(9),  td:nth-child(9)  { width: 5%; text-align: center; padding-left: 8px; padding-right: 8px; }  /* Days */
+    th:nth-child(10), td:nth-child(10) { width: 4%; text-align: left; padding-left: 8px; padding-right: 8px; }  /* Target */
+    th:nth-child(11), td:nth-child(11) { width: 4%; text-align: center; padding-left: 8px; padding-right: 8px; }  /* Power */
+    th:nth-child(12), td:nth-child(12) { width: 4%; text-align: center; padding-left: 8px; padding-right: 8px; }  /* Azimuth */
+    th:nth-child(14), td:nth-child(14) { width: 4%; text-align: center; padding-left: 8px; padding-right: 8px; }  /* Source */
+
+    /* Left align text columns */
+    th:nth-child(3),  td:nth-child(3)  { width: 8%;  text-align: left; }  /* Station */
+    th:nth-child(6),  td:nth-child(6)  { width: 6%;  text-align: left; }  /* Language */
+    th:nth-child(7),  td:nth-child(7)  { width: 8%;  text-align: left; }  /* Site */
+    th:nth-child(8),  td:nth-child(8)  { width: 5%;  text-align: left; }  /* TX Country */
+    th:nth-child(13), td:nth-child(13) { width: 5%;  text-align: left; }  /* Origin */
+
+    th, td {
+      padding: 3px 8px 3px 16px;
+      border-bottom: 1px solid var(--border);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-align: center;
+    }
+
+    th {
+      background: var(--header-bg);
+      color: var(--header-text);
+      font-weight: 500;
+      font-size: 0.9375rem;
+      text-align: center;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      border-right: 1px solid rgba(255,255,255,0.2);
+    }
+
+    td { font-size: 0.895rem; color: var(--text); border-right: 1px solid var(--border); }
+    th:last-child { border-right: none; }
+    td:last-child { border-right: none; }
+
+    tbody tr:nth-child(even) td { background: var(--row-even); }
+    tbody tr:hover td { background: var(--row-hover) !important; }
+
+    /* ── Empty / no-results state ── */
+    .empty-state {
+      text-align: center;
+      padding: 52px 20px;
+      color: var(--text-dim);
+      font-size: 0.95rem;
+    }
+    .empty-state .icon { font-size: 40px; margin-bottom: 10px; }
+
+    /* ── Custom scrollbar ── */
+    tbody::-webkit-scrollbar { width: 7px; }
+    tbody::-webkit-scrollbar-track { background: var(--panel); }
+    tbody::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+    tbody::-webkit-scrollbar-thumb:hover { background: var(--button-bg); }
+
+    /* ── Sortable headers ── */
+    th.sortable { cursor: pointer; user-select: none; }
+    th.sortable:hover { background: var(--button-hover); }
+    th.sortable .sort-arrow { margin-left: 8px; opacity: 0.55; font-size: 1em; font-weight: 700; }
+    th.sortable.sort-asc .sort-arrow,
+    th.sortable.sort-desc .sort-arrow { opacity: 1; color: #ffffff; }
+
+    /* ── Connection header ── */
+    header {
+      text-align: center;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #30363d;
+    }
+
+    h1 {
+      color: #3495eb;
+      font-size: 1.7em;
+      font-weight: normal;
+      margin-bottom: 10px;
+    }
+
+    .connection-status {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 15px;
+      border-radius: 20px;
+      font-size: 0.85em;
+      height: 35px;
+      box-sizing: border-box;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      line-height: 1.3;
+    }
+    .connection-status.connected    { background: rgba(35,134,54,0.2);   color: #3fb950; border: 1px solid #238636; }
+    .connection-status.disconnected { background: rgba(248,81,73,0.15);  color: #f85149; border: 1px solid #da3633; }
+    .connection-status.connecting   { background: rgba(210,153,34,0.15); color: #d29922; border: 1px solid #9e6a03; }
+
+    .connection-control {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-top: 15px;
+      gap: 15px;
+    }
+
+    .connection-input-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .ip-input {
+      padding: 8px 12px;
+      background: #1c2128;
+      border: 1px solid #373e47;
+      border-radius: 8px;
+      color: #e6e6e6;
+      font-size: 1em;
+      width: 150px;
+      height: 35px;
+      box-sizing: border-box;
+      text-align: right;
+      transition: border-color 0.2s;
+    }
+    .ip-input:focus {
+      outline: none;
+      border-color: #b4bcc6;
+      box-shadow: 0 0 0 3px rgba(88,166,255,0.1);
+    }
+
+    .connect-btn {
+      padding: 0 12px;
+      background: #238636;
+      color: #fff;
+      border: 1px solid #2ea043;
+      border-radius: 6px;
+      font-size: 0.9em;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.2s;
+      height: 32px;
+      box-sizing: border-box;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .connect-btn:hover { background: #2ea043; box-shadow: 0 0 8px rgba(46,160,67,0.4); }
+    .connect-btn:active { transform: translateY(1px); }
+    .connect-btn.disconnect { background: #7a2020; border-color: #8b3a3a; color: #e6e6e6; }
+    .connect-btn.disconnect:hover { background: #8b3a3a; box-shadow: 0 0 8px rgba(122,32,32,0.4); }
+
+    .error-message {
+      background: rgba(248,81,73,0.15);
+      color: #f85149;
+      border: 1px solid #da3633;
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 15px;
+      display: none;
+    }
+    .error-message.show { display: block; }
+  </style>
+</head>
+<body>
+
+  <!-- ── StationFinder header ── -->
+  <header>
+    <h1>StationFinder v1.0</h1>
+    <div class="connection-control">
+      <div class="connection-status disconnected" id="connectionStatus">● Disconnected</div>
+      <div class="connection-input-group">
+        <input type="text" id="ipAddress" class="ip-input" value="127.0.0.1" placeholder="IP Address" />
+        <input type="text" id="portSelect" class="ip-input" value="5454" placeholder="Port" style="width:70px; text-align:center;" />
+        <button id="connectBtn" class="connect-btn" onclick="wsToggleConnection()">Connect</button>
+      </div>
+    </div>
+  </header>
+  <div class="error-message" id="errorMessage"></div>
+
+  <!-- ── Tool bar ── -->
+  <div class="topbar">
+    <button class="file-btn" onclick="document.getElementById('fileInput').click()">
+      📁 Import File
+    </button>
+    <input type="file" id="fileInput" accept=".csv,.s1b,.txt" />
+    <button class="mode-tab active" id="manualBtn" onclick="setTrackMode('manual')" style="margin-left:15px;" disabled>Manual</button>
+    <button class="mode-tab" id="fetchBtn" onclick="doFetch()" disabled>Fetch</button>
+    <button class="mode-tab" id="trackBtn" onclick="setTrackMode('track')" disabled>Track</button>
+    <button class="mode-tab" id="resetBtn" onclick="doReset()" disabled style="margin-left:15px;">Reset All</button>
+    <button class="mode-tab" id="webSearch1Btn" onclick="doWebSearch1()" disabled style="margin-left:15px;">Web Search 1</button>
+    <button class="mode-tab" id="webSearch2Btn" onclick="doWebSearch2()" disabled>Web Search 2</button>
+    <button class="mode-tab" id="helpBtn" onclick="toggleHelp()" style="margin-left:15px;">Help</button>
+    <div class="spacer"></div>
+    <div id="clockDisplay" style="text-align:right; color:var(--text-dim); line-height:1.6;"></div>
+  </div>
+
+  <div class="search-row">
+    <span class="search-label">Search (Frequency):</span>
+    <input type="text" id="searchBox" placeholder="Enter in kHz" autocomplete="off" disabled />
+    <div class="mode-tabs">
+      <button class="mode-tab active" data-mode="exact"  onclick="setMode('exact')" disabled>Exact</button>
+      <button class="mode-tab"        data-mode="prefix" onclick="setMode('prefix')" disabled>Prefix</button>
+      <button class="mode-tab"        data-mode="range"  onclick="setMode('range')" disabled>Range</button>
+      <div class="mode-tabs" style="margin-left:8px;">
+        <button class="mode-tab active" id="showAllBtn" onclick="setNowOn(false)" disabled>Show All</button>
+        <button class="mode-tab"        id="nowOnBtn"   onclick="setNowOn(true)" disabled>On Now</button>
+      </div>
+      <select id="langFilter" class="filter-select" onchange="langChanged()" style="margin-left:8px; max-width:140px;" disabled></select>
+      <select id="srcFilter" class="filter-select" onchange="doSearch()" style="margin-left:8px; margin-right:10px;" disabled></select>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <span class="search-label">Search (Station):</span>
+      <input type="text" id="stationBox" placeholder="e.g. BBC" autocomplete="off" disabled />
+    </div>
+  </div>
+
+  <div class="status-bar">
+    <span id="statusText">No file loaded</span>
+    <span class="pill"       id="rowPill"   style="display:none"></span>
+    <span class="pill green" id="matchPill" style="display:none"></span>
+    <span id="vfoPill" style="display:none; margin-left:12px;"></span>
+  </div>
+
+  <div class="table-wrap">
+    <table id="csvTable">
+      <thead></thead>
+      <tbody id="tbodyEl">
+        <tr><td colspan="20">
+          <div class="empty-state">
+            <div class="icon">📡</div>
+            <p>Load a database file to begin searching station data</p>
+          </div>
+        </td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div id="footer" style="text-align:center; color:#666; font-size:0.8em; margin-top:14px; padding-bottom:6px;">
+    Created by Roger Need &copy; 2026 &nbsp;&nbsp; GPL v3
+  </div>
+
+  <!-- ── Help Modal ── -->
+  <div id="helpOverlay" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:1000; align-items:center; justify-content:center;">
+    <div style="background:#161b22; border:1px solid #30363d; border-radius:8px; padding:28px 48px; max-width:750px; width:90%; max-height:92vh; overflow-y:auto; position:relative;">
+      <button onclick="toggleHelp()" style="position:absolute; top:12px; right:16px; background:none; border:none; color:#e6e6e6; font-size:1.3em; cursor:pointer;">✕</button>
+
+      <h3 style="color:#80cbc4; margin-bottom:8px;">About</h3>
+      <p style="margin-bottom:16px; line-height:1.6; color:#e6e6e6; max-width:90%;">
+        <a href="https://github.com/Roger-Need/tinyGTC-Toolkit" target="_blank" style="color:#60b8e0; text-decoration:underline;">StationFinder</a> is a self-contained radio station database application. Load a schedule
+        file (Aoki, EiBi, swskeds or s1b format) and search by frequency.  Then filter by station name,
+        mode, language, source, or on-air status. Optionally connect to SDRconnect
+        via WebSocket to track and tune stations in real time.
+      </p>
+
+      <h3 style="color:#80cbc4; margin-bottom:8px;">Buttons</h3>
+      <div style="display:grid; grid-template-columns:max-content 1fr; gap:2px 16px; margin-bottom:16px; font-size:0.9em;">
+        <span style="color:#60b8e0; padding:3px 0;">Import File</span><span style="color:#e6e6e6; padding:3px 0;">Load a Aoki, EiBi, swskeds or s1b schedule file.</span>
+        <span style="color:#60b8e0; padding:3px 0;">Manual</span><span style="color:#e6e6e6; padding:3px 0;">Search manually by typing a frequency.</span>
+        <span style="color:#60b8e0; padding:3px 0;">Fetch</span><span style="color:#e6e6e6; padding:3px 0;">One-shot read of the SDR VFO frequency.</span>
+        <span style="color:#60b8e0; padding:3px 0;">Track</span><span style="color:#e6e6e6; padding:3px 0;">Continuously follow the SDR VFO frequency.</span>
+        <span style="color:#60b8e0; padding:3px 0;">Reset All</span><span style="color:#e6e6e6; padding:3px 0;">Clear all search fields and filters.</span>
+        <span style="color:#60b8e0; padding:3px 0;">Web Search 1</span><span style="color:#e6e6e6; padding:3px 0;">Search current VFO frequency on shortwave.live.</span>
+        <span style="color:#60b8e0; padding:3px 0;">Web Search 2</span><span style="color:#e6e6e6; padding:3px 0;">Search current VFO frequency on short-wave.info.</span>
+        <span style="color:#60b8e0; padding:3px 0;">Exact / Prefix / Range</span><span style="color:#e6e6e6; padding:3px 0;">Switch frequency search mode. Range accepts e.g. 9000-10000 kHz.</span>
+        <span style="color:#60b8e0; padding:3px 0;">Show All / On Now</span><span style="color:#e6e6e6; padding:3px 0;">Filter to stations currently on air based on UTC time.</span>
+        <span style="color:#60b8e0; padding:3px 0;">Language / Source</span><span style="color:#e6e6e6; padding:3px 0;">Filter results by language or schedule source.</span>
+        <span style="color:#60b8e0; padding:3px 0;">Double-click row</span><span style="color:#e6e6e6; padding:3px 0;">Tune the SDR receiver to that station's frequency and mode.</span>
+      </div>
+
+      <h3 style="color:#80cbc4; margin-bottom:8px;">Keyboard Shortcuts</h3>
+      <div style="display:grid; grid-template-columns:max-content 1fr; gap:2px 16px; margin-bottom:16px; font-size:0.9em;">
+        <span style="color:#60b8e0; padding:3px 0;">F or f</span><span style="color:#e6e6e6; padding:3px 0;">Jump to frequency search box.</span>
+        <span style="color:#60b8e0; padding:3px 0;">S or s</span><span style="color:#e6e6e6; padding:3px 0;">Jump to station search box.</span>
+        <span style="color:#60b8e0; padding:3px 0;">Enter</span><span style="color:#e6e6e6; padding:3px 0;">Run search and release focus.</span>
+        <span style="color:#60b8e0; padding:3px 0;">Escape</span><span style="color:#e6e6e6; padding:3px 0;">Release focus from search box.</span>
+      </div>
+
+      <h3 style="color:#80cbc4; margin-bottom:8px;">Download Schedule Files</h3>
+      <div style="display:grid; grid-template-columns:max-content 1fr; gap:2px 16px; font-size:0.9em;">
+        <span style="padding:3px 0;"><a href="https://www1.s2.starcat.ne.jp/ndxc" target="_blank" style="color:#60b8e0;">Aoki</a></span><span style="color:#e6e6e6; padding:3px 0;">Aoki database is in zip file. Extract nz---.txt file.</span>
+        <span style="padding:3px 0;"><a href="http://www.eibispace.de/" target="_blank" style="color:#60b8e0;">EiBi</a></span><span style="color:#e6e6e6; padding:3px 0;">EiBi frequency database. Download CSV database.</span>
+        <span style="padding:3px 0;"><a href="https://groups.io/g/swskeds" target="_blank" style="color:#60b8e0;">swskeds</a></span><span style="color:#e6e6e6; padding:3px 0;">Combined EiBi/Aoki/HFCC schedule database is in Files section.</span>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    // Toggle the help modal overlay open or closed
+    function toggleHelp() {
+      const overlay = document.getElementById('helpOverlay');
+      const visible = overlay.style.display === 'flex';
+      overlay.style.display = visible ? 'none' : 'flex';
+    }
+
+    // Close help modal on Escape, or outside click
+    document.getElementById('helpOverlay').addEventListener('click', (e) => {
+      if (e.target === document.getElementById('helpOverlay')) toggleHelp();
+    });
+
+    let allRows    = [];   // All loaded rows including header row at index 0
+    let sortCol    = -1;   // Currently sorted column index, -1 means no sort active
+    let sortDir    = 1;    // Sort direction: 1 = ascending, -1 = descending
+    // Column sort types by index: num = numeric sort, alpha = alphabetical sort
+    const sortableCols = { 0: 'num', 1: 'alpha', 2: 'alpha', 3: 'num', 4: 'num', 5: 'alpha' };
+    let searchMode = 'exact'; // Current search mode: exact, prefix, or range
+    let debounceId = null; // Timer ID for debounced search input
+    let renderRaf  = null; // requestAnimationFrame ID for batched row rendering
+
+    const fileInput  = document.getElementById('fileInput');
+    const searchBox  = document.getElementById('searchBox');
+    const thead      = document.querySelector('#csvTable thead');
+    const tbody      = document.getElementById('tbodyEl');
+    const statusText = document.getElementById('statusText');
+    const rowPill    = document.getElementById('rowPill');
+    const matchPill  = document.getElementById('matchPill');
+
+    let dbLoaded = false; // True once a schedule file has been successfully loaded
+
+    // Enable or disable Track/Fetch buttons based on WebSocket and database state.
+    // If WebSocket closes while in track mode, automatically revert to manual mode.
+    function updateTrackBtn() {
+      const trackBtn = document.getElementById('trackBtn');
+      const fetchBtn = document.getElementById('fetchBtn');
+      const wsOpen   = ws && ws.readyState === WebSocket.OPEN;
+      trackBtn.disabled = !(dbLoaded && wsOpen);
+      fetchBtn.disabled = !(dbLoaded && wsOpen && !trackMode);
+      if (!wsOpen && trackMode) setTrackMode('manual');
+    }
+
+    let fetchPending = false;
+
+    // One-shot fetch of the SDR VFO frequency. Sets fetchPending so the
+    // next frequency response is used to populate the search box.
+    function doFetch() {
+      if (!ws || ws.readyState !== WebSocket.OPEN || trackMode) return;
+      const btn = document.getElementById('fetchBtn');
+      btn.classList.add('active');
+      setTimeout(() => btn.classList.remove('active'), 500);
+      fetchPending = true;
+      ws.send(JSON.stringify({ event_type: 'get_property', property: 'device_vfo_frequency', value: '' }));
+    }
+
+    let trackMode = false;
+
+    // Switch between manual and track mode. In track mode the search box
+    // becomes read-only and prefix/range search modes are disabled since
+    // the SDR VFO drives the frequency automatically.
+    function setTrackMode(mode) {
+      trackMode = (mode === 'track');
+      document.getElementById('manualBtn').classList.toggle('active', !trackMode);
+      document.getElementById('trackBtn').classList.toggle('active',  trackMode);
+      document.getElementById('fetchBtn').disabled = trackMode || !(dbLoaded && ws && ws.readyState === WebSocket.OPEN);
+      document.querySelector('.mode-tab[data-mode="prefix"]').disabled = trackMode;
+      document.querySelector('.mode-tab[data-mode="range"]').disabled  = trackMode;
+      searchBox.readOnly = trackMode;
+      searchBox.style.opacity = trackMode ? '0.6' : '1';
+      if (trackMode && ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ event_type: 'get_property', property: 'device_vfo_frequency', value: '' }));
+      }
+    }
+
+    // Switch frequency search mode. Smart pre-filling: switching exact→range
+    // pre-fills a ±150 kHz window around the current value; switching
+    // range→exact uses the midpoint of the range; prefix clears the box.
+    function setMode(mode) {
+      if (mode === 'range' && searchMode === 'exact') {
+        const val = parseFloat(searchBox.value.trim());
+        if (!isNaN(val)) {
+          searchBox.value = Math.round(val - 150) + '-' + Math.round(val + 150);
+        }
+      } else if (mode === 'exact' && searchMode === 'range') {
+        const parts = searchBox.value.split('-').map(s => parseFloat(s.trim()));
+        if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+          searchBox.value = Math.round((parts[0] + parts[1]) / 2);
+        }
+      } else if (mode === 'prefix') {
+        searchBox.value = '';
+      } else if (searchMode === 'prefix') {
+        searchBox.value = '';
+      }
+      searchMode = mode;
+      document.querySelectorAll('.mode-tab[data-mode]').forEach(t =>
+        t.classList.toggle('active', t.dataset.mode === mode)
+      );
+      searchBox.placeholder =
+        mode === 'range'  ? 'e.g. 9000-10000 kHz' :
+        mode === 'prefix' ? 'e.g. 96 → 96.000, 96.100…' : 'Enter in kHz';
+      if (mode === 'exact') {
+        clearTimeout(debounceId);
+        if (searchBox.value.trim()) doSearch();
+      } else {
+        doSearch();
+      }
+    }
+
+    let isSkedFormat  = false;
+    let isS1bFormat   = false;
+    let isAokiFormat  = false;
+    let nowOn         = false;
+
+    function langChanged() {
+      const el = document.getElementById('langFilter');
+      el.style.color = el.value ? 'var(--text)' : 'var(--text-dim)';
+      doSearch();
+    }
+
+    function initLangFilter() {
+      const el = document.getElementById('langFilter');
+      el.addEventListener('focus', () => { el.style.color = 'var(--text)'; });
+      el.addEventListener('blur',  () => { el.style.color = el.value ? 'var(--text)' : 'var(--text-dim)'; });
+    }
+    initLangFilter();
+
+    function setNowOn(val) {
+      nowOn = val;
+      document.getElementById('showAllBtn').classList.toggle('active', !val);
+      document.getElementById('nowOnBtn').classList.toggle('active', val);
+      doSearch();
+    }
+
+    function doReset() {
+      const btn = document.getElementById('resetBtn');
+      btn.classList.add('active');
+      setTimeout(() => btn.classList.remove('active'), 500);
+
+      searchBox.value = '';
+      document.getElementById('stationBox').value = '';
+      setTrackMode('manual');
+      setMode('exact');
+      if (nowOn) setNowOn(false);
+
+      const langFilter = document.getElementById('langFilter');
+      langFilter.value = '';
+      langFilter.style.color = 'var(--text-dim)';
+
+      const srcFilter = document.getElementById('srcFilter');
+      if (!srcFilter.disabled) srcFilter.value = '';
+
+      matchPill.style.display = 'none';
+      thead.innerHTML = '';
+      tbody.innerHTML = `<tr><td colspan="20"><div class="empty-state">
+        <div class="icon">📡</div>
+        <p>Enter a frequency to search</p>
+      </div></td></tr>`;
+    }
+
+    function doWebSearch(url) {
+      if (!currentVfo) return;
+      window.open(url + Math.round(parseFloat(currentVfo)), '_blank');
+    }
+
+    function doWebSearch1() { doWebSearch('https://shortwave.live/khz?q='); }
+    function doWebSearch2() { doWebSearch('https://m.short-wave.info/index.php?freq='); }
+
+    function isOnAir(onStr, offStr) {
+      // Get current UTC time as minutes since midnight
+      const now = new Date();
+      const utcMins = now.getUTCHours() * 60 + now.getUTCMinutes();
+
+      const parseTime = (s) => {
+        s = s.trim().replace(/\D/g, '');
+        if (!s || s.length < 3) return null;
+        const h = parseInt(s.slice(0, -2)) || 0;
+        const m = parseInt(s.slice(-2)) || 0;
+        // 2400 = end of day = 1440 mins
+        return h === 24 ? 1440 : h * 60 + m;
+      };
+
+      const on  = parseTime(onStr);
+      const off = parseTime(offStr);
+      if (on === null || off === null) return false; // no time data, hide when Now On active
+
+      // 2400 means always on until midnight
+      if (off === 1440) return utcMins >= on;
+
+      if (on <= off) {
+        // Normal range e.g. 0600-1800
+        return utcMins >= on && utcMins < off;
+      } else {
+        // Spans midnight e.g. 2300-0100
+        return utcMins >= on || utcMins < off;
+      }
+    }
+
+    // ITU country code lookup table — source: EiBi README.TXT section D-II
+    const ITU_COUNTRIES = {
+      "ABW": "Aruba", "AFG": "Afghanistan", "AFS": "South Africa", "AGL": "Angola", "AIA": "Anguilla", "ALB": "Albania", "ALG": "Algeria", "ALS": "Alaska",
+      "AMS": "Saint Paul & Amsterdam Is.", "AND": "Andorra", "AOE": "Western Sahara", "ARG": "Argentina", "ARM": "Armenia", "ARS": "Saudi Arabia", "ASC": "Ascension Island", "ATA": "Antarctica",
+      "ATG": "Antigua and Barbuda", "ATN": "Netherlands Antilles", "AUS": "Australia", "AUT": "Austria", "AZE": "Azerbaijan", "AZR": "Azores", "B": "Brasil", "BAH": "Bahamas",
+      "BDI": "Burundi", "BEL": "Belgium", "BEN": "Benin", "BER": "Bermuda", "BES": "Bonaire", "BFA": "Burkina Faso", "BGD": "Bangla Desh", "BHR": "Bahrain",
+      "BIH": "Bosnia-Herzegovina", "BIO": "Chagos Is. (Diego Garcia)", "BLM": "Saint-Barthelemy", "BLR": "Belarus", "BLZ": "Belize", "BOL": "Bolivia", "BOT": "Botswana", "BRB": "Barbados",
+      "BRU": "Brunei Darussalam", "BTN": "Bhutan", "BUL": "Bulgaria", "BVT": "Bouvet", "CAB": "Cabinda", "CAF": "Central African Republic", "CAN": "Canada", "CBG": "Cambodia",
+      "CEU": "Ceuta", "CG7": "Guantanamo Bay", "CHL": "Chile", "CHN": "China", "CHR": "Christmas Island (Indian Ocean)", "CKH": "Cook Island", "CLA": "Clandestine stations", "CLM": "Colombia",
+      "CLN": "Sri Lanka", "CME": "Cameroon", "CNR": "Canary Islands", "COD": "DR Congo", "COG": "Congo", "COM": "Comores", "CPT": "Clipperton", "CPV": "Cape Verde Islands",
+      "CRO": "Crozet Archipelago", "CTI": "Ivory Coast", "CTR": "Costa Rica", "CUB": "Cuba", "CUW": "Curacao", "CVA": "Vatican State", "CYM": "Cayman Islands", "CYP": "Cyprus",
+      "CZE": "Czech Republic", "D": "Germany", "DJI": "Djibouti", "DMA": "Dominica", "DNK": "Denmark", "DOM": "Dominican Republic", "E": "Spain", "EGY": "Egypt",
+      "EQA": "Ecuador", "ERI": "Eritrea", "EST": "Estonia", "ETH": "Ethiopia", "EUR": "Iles Europe", "F": "France", "FIN": "Finland", "FJI": "Fiji",
+      "FLK": "Falkland Islands", "FRO": "Faroe Islands", "FSM": "Micronesia", "G": "United Kingdom", "GAB": "Gabon", "GEO": "Georgia", "GHA": "Ghana", "GIB": "Gibraltar",
+      "GLP": "Guadeloupe", "GMB": "Gambia", "GNB": "Guinea-Bissau", "GNE": "Equatorial Guinea", "GPG": "Galapagos", "GRC": "Greece", "GRD": "Grenada", "GRL": "Greenland",
+      "GTM": "Guatemala", "GUF": "French Guyana", "GUI": "Guinea", "GUM": "Guam", "GUY": "Guyana", "HKG": "Hong Kong", "HMD": "Heard & McDonald Islands", "HND": "Honduras",
+      "HNG": "Hungary", "HOL": "The Netherlands", "HRV": "Croatia", "HTI": "Haiti", "HWA": "Hawaii", "HWL": "Howland & Baker", "I": "Italy", "ICO": "Cocos (Keeling) Island",
+      "IND": "India", "INS": "Indonesia", "IRL": "Ireland", "IRN": "Iran", "IRQ": "Iraq", "ISL": "Iceland", "ISR": "Israel", "IW": "International Waters",
+      "IWA": "Ogasawara", "J": "Japan", "JAR": "Jarvis Island", "JDN": "Juan de Nova", "JMC": "Jamaica", "JMY": "Jan Mayen", "JON": "Johnston Island", "JOR": "Jordan",
+      "JUF": "Juan Fernandez Island", "KAL": "Kaliningrad", "KAZ": "Kazakhstan", "KEN": "Kenya", "KER": "Kerguelen", "KGZ": "Kyrgyzstan", "KIR": "Kiribati", "KNA": "St Kitts and Nevis",
+      "KOR": "South Korea", "KOS": "Kosovo", "KRE": "North Korea", "KWT": "Kuwait", "LAO": "Laos", "LBN": "Lebanon", "LBR": "Liberia", "LBY": "Libya",
+      "LCA": "Saint Lucia", "LIE": "Liechtenstein", "LSO": "Lesotho", "LTU": "Lithuania", "LUX": "Luxembourg", "LVA": "Latvia", "MAC": "Macao", "MAF": "St Martin",
+      "MAU": "Mauritius", "MCO": "Monaco", "MDA": "Moldova", "MDG": "Madagascar", "MDR": "Madeira", "MDW": "Midway Islands", "MEL": "Melilla", "MEX": "Mexico",
+      "MHL": "Marshall Islands", "MKD": "Macedonia", "MLA": "Malaysia", "MLD": "Maldives", "MLI": "Mali", "MLT": "Malta", "MNE": "Montenegro", "MNG": "Mongolia",
+      "MOZ": "Mozambique", "MRA": "Northern Mariana Islands", "MRC": "Morocco", "MRN": "Marion Is.", "MRT": "Martinique", "MSR": "Montserrat", "MTN": "Mauritania", "MWI": "Malawi",
+      "MYA": "Myanmar", "MYT": "Mayotte", "NCG": "Nicaragua", "NCL": "New Caledonia", "NFK": "Norfolk Island", "NGR": "Niger", "NIG": "Nigeria", "NIU": "Niue",
+      "NMB": "Namibia", "NOR": "Norway", "NPL": "Nepal", "NRU": "Nauru", "NZL": "New Zealand", "OCE": "French Polynesia", "OMA": "Oman", "PAK": "Pakistan",
+      "PAQ": "Easter Island", "PHL": "Philippines", "PHX": "Phoenix Is.", "PLM": "Palmyra Island", "PLW": "Palau", "PNG": "Papua New Guinea", "PNR": "Panama", "POL": "Poland",
+      "POR": "Portugal", "PRG": "Paraguay", "PRU": "Peru", "PRV": "Okino-Tori-Shima", "PSE": "Palestine", "PTC": "Pitcairn", "PTR": "Puerto Rico", "QAT": "Qatar",
+      "REU": "La Reunion", "ROD": "Rodrigues", "ROU": "Romania", "RRW": "Rwanda", "RUS": "Russian Federation", "S": "Sweden", "SAP": "San Andres & Providencia", "SDN": "Sudan",
+      "SEN": "Senegal", "SEY": "Seychelles", "SGA": "South Georgia Islands", "SHN": "Saint Helena", "SLM": "Solomon Islands", "SLV": "El Salvador", "SMA": "Samoa (American)", "SMO": "Samoa",
+      "SMR": "San Marino", "SNG": "Singapore", "SOK": "South Orkney Islands", "SOM": "Somalia", "SPM": "Saint Pierre et Miquelon", "SRB": "Serbia", "SRL": "Sierra Leone", "SSD": "South Sudan",
+      "SSI": "South Sandwich Islands", "STP": "Sao Tome & Principe", "SUI": "Switzerland", "SUR": "Suriname", "SVB": "Svalbard", "SVK": "Slovakia", "SVN": "Slovenia", "SWZ": "Swaziland",
+      "SXM": "Sint Maarten", "SYR": "Syria", "TCA": "Turks and Caicos Islands", "TCD": "Tchad", "TGO": "Togo", "THA": "Thailand", "TJK": "Tajikistan", "TKL": "Tokelau",
+      "TKM": "Turkmenistan", "TLS": "Timor-Leste", "TON": "Tonga", "TRC": "Tristan da Cunha", "TRD": "Trinidad and Tobago", "TUN": "Tunisia", "TUR": "Turkey", "TUV": "Tuvalu",
+      "TWN": "Taiwan", "TZA": "Tanzania", "UAE": "United Arab Emirates", "UGA": "Uganda", "UKR": "Ukraine", "UN": "United Nations", "URG": "Uruguay", "USA": "USA",
+      "UZB": "Uzbekistan", "VCT": "St Vincent & Grenadines", "VEN": "Venezuela", "VIR": "American Virgin Islands", "VRG": "British Virgin Islands", "VTN": "Vietnam", "VUT": "Vanuatu", "WAK": "Wake Island",
+      "WAL": "Wallis and Futuna", "XBY": "Abyei area", "XGZ": "Gaza strip", "XSP": "Spratly Islands", "XUU": "Unidentified", "XWB": "West Bank", "YEM": "Yemen", "ZMB": "Zambia",
+      "ZWE": "Zimbabwe"
+    };
+
+    // Columns (1-based) empty in sked format: Mode, Site, Power, Azimuth
+    const SKED_EMPTY_COLS = [2, 7, 11, 12];
+    // Columns (1-based) empty in s1b format: Language, Site, TX Country, Days, Target, Power, Azimuth, Origin
+    const S1B_EMPTY_COLS  = [6, 7, 8, 9, 10, 11, 12, 13];
+    // Columns (1-based) empty in AOKI format: Mode, Target
+    const AOKI_EMPTY_COLS = [2, 10];
+
+    function applyColVisibility() {
+      // First show all
+      for (let n = 1; n <= 14; n++) {
+        document.querySelectorAll(`th:nth-child(${n}), td:nth-child(${n})`).forEach(el => {
+          el.style.display = '';
+          el.style.width = '';
+          el.style.padding = '';
+        });
+      }
+      // Then hide empty cols for the current format
+      const emptyCols = isS1bFormat ? S1B_EMPTY_COLS : isSkedFormat ? SKED_EMPTY_COLS : isAokiFormat ? AOKI_EMPTY_COLS : [];
+      emptyCols.forEach(n => {
+        document.querySelectorAll(`th:nth-child(${n}), td:nth-child(${n})`).forEach(el => {
+          el.style.display = 'none';
+          el.style.width = '0';
+          el.style.padding = '0';
+        });
+      });
+    }
+
+
+    fileInput.addEventListener('change', function () {
+      const file = fileInput.files[0];
+      if (!file) return;
+
+      // Clear existing database before any load attempt
+      allRows      = [];
+      dbLoaded     = false;
+      isSkedFormat = false;
+      isS1bFormat  = false;
+      isAokiFormat = false;
+      thead.innerHTML = '';
+      tbody.innerHTML = `<tr><td colspan="20"><div class="empty-state">
+        <div class="icon">📡</div>
+        <p>Enter a frequency to search</p>
+      </div></td></tr>`;
+      rowPill.style.display = matchPill.style.display = 'none';
+      updateTrackBtn();
+
+      statusText.textContent = 'Loading…';
+
+      // Only accept .txt files that begin with 'nz'
+      if (file.name.endsWith('.txt') && !file.name.startsWith('nz')) {
+        fileInput.value = '';
+        statusText.textContent = 'Invalid file import';
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target.result;
+        const allLines  = text.split(/\r?\n/);
+        const firstLine = allLines[0];
+        const isAoki    = allLines[1] && allLines[1].trimStart().startsWith('FRE');
+
+        if (file.name.toLowerCase().endsWith('.s1b')) {
+          allRows = parseS1bFormat(text);
+          isSkedFormat = false;
+          isS1bFormat  = true;
+          isAokiFormat = false;
+        } else if (isAoki) {
+          allRows = parseAokiFormat(text);
+          isSkedFormat = false;
+          isS1bFormat  = false;
+          isAokiFormat = true;
+        } else if (firstLine.includes(';')) {
+          allRows = parseSkedFormat(text);
+          isSkedFormat = true;
+          isS1bFormat  = false;
+          isAokiFormat = false;
+        } else if (file.name.toLowerCase().endsWith('.csv')) {
+          allRows = parseCSV(text).filter((row, i) => i === 0 || row[0].trim() !== '');
+          isSkedFormat = false;
+          isS1bFormat  = false;
+          isAokiFormat = false;
+          // Remove Date column if entirely empty
+          const dateIdx = allRows[0].findIndex(h => h.trim() === 'Date');
+          if (dateIdx !== -1) {
+            const hasData = allRows.slice(1).some(row => row[dateIdx] && row[dateIdx].trim() !== '');
+            if (!hasData) allRows = allRows.map(row => row.filter((_, i) => i !== dateIdx));
+          }
+          // Remove Notes column
+          const notesIdx = allRows[0].findIndex(h => h.trim() === 'Notes');
+          if (notesIdx !== -1) allRows = allRows.map(row => row.filter((_, i) => i !== notesIdx));
+        } else {
+          fileInput.value = '';
+          statusText.textContent = 'Invalid file import';
+          return;
+        }
+        document.getElementById('footer').style.display = 'none';
+        rowPill.textContent = (allRows.length - 1).toLocaleString() + ' rows';
+        rowPill.style.display = '';
+        statusText.textContent = 'Loaded · ' + file.name;
+        document.getElementById('trackBtn').disabled = false;
+        dbLoaded = true;
+        document.getElementById('resetBtn').disabled = false;
+        document.getElementById('manualBtn').disabled = false;
+        document.getElementById('showAllBtn').disabled = false;
+        document.getElementById('nowOnBtn').disabled = false;
+        document.querySelector('.mode-tab[data-mode="exact"]').disabled = false;
+        document.querySelector('.mode-tab[data-mode="prefix"]').disabled = false;
+        document.querySelector('.mode-tab[data-mode="range"]').disabled = false;
+        document.getElementById('langFilter').disabled = false;
+        document.getElementById('srcFilter').disabled = false;
+        document.getElementById('searchBox').disabled = false;
+        document.getElementById('stationBox').disabled = false;
+        updateTrackBtn();
+
+        // Populate language dropdown
+        const langCol = allRows[0].indexOf('Language');
+        const langs = new Set();
+        if (langCol !== -1) {
+          allRows.slice(1).forEach(row => { if (row[langCol] && row[langCol].trim()) langs.add(row[langCol].trim()); });
+        }
+        const langFilter = document.getElementById('langFilter');
+        langFilter.innerHTML = '<option value="">All Languages</option>';
+
+        // Add convenience entries for freq.csv format
+        if (!isSkedFormat && !isS1bFormat) {
+
+          // English exact match for convenience
+          if (langs.has('English')) {
+            const opt = document.createElement('option');
+            opt.value = 'English';
+            opt.textContent = 'English only';
+            langFilter.appendChild(opt);
+          }
+
+          // "All" variants — only if multiple entries contain the word
+          const allGroups = [
+            { word: 'english', label: 'English (all)' },
+            { word: 'arabic',  label: 'Arabic (all)'  },
+            { word: 'chinese', label: 'Chinese (all)' },
+            { word: 'french',  label: 'French (all)'  },
+            { word: 'german',  label: 'German (all)'  },
+            { word: 'korean',  label: 'Korean (all)'  },
+            { word: 'russian', label: 'Russian (all)' },
+            { word: 'spanish', label: 'Spanish (all)' },
+          ];
+          allGroups.forEach(({ word, label }) => {
+            const variants = [...langs].filter(l => l.toLowerCase().includes(word));
+            if (variants.length > 1) {
+              const opt = document.createElement('option');
+              opt.value = `__${word}_all__`;
+              opt.textContent = label;
+              langFilter.appendChild(opt);
+            }
+          });
+        }
+        langFilter.style.borderColor = 'var(--border)';
+        langFilter.style.boxShadow = 'none';
+        langFilter.style.color = 'var(--text-dim)';
+
+        // Setup source filter
+        const srcFilter = document.getElementById('srcFilter');
+        if (isS1bFormat) {
+          srcFilter.innerHTML = '<option value="s1b">s1b</option>';
+          srcFilter.disabled = true;
+          srcFilter.style.color = 'var(--text-dim)';
+        } else if (isSkedFormat) {
+          srcFilter.innerHTML = '<option value="EiBi">EiBi</option>';
+          srcFilter.disabled = true;
+          srcFilter.style.color = 'var(--text-dim)';
+        } else if (isAokiFormat) {
+          srcFilter.innerHTML = '<option value="Aoki">Aoki</option>';
+          srcFilter.disabled = true;
+          srcFilter.style.color = 'var(--text-dim)';
+        } else {
+          srcFilter.innerHTML = '<option value="">All</option><option value="EiBi">EiBi</option><option value="Aoki">Aoki</option><option value="HFCC">HFCC</option>';
+          srcFilter.disabled = false;
+          srcFilter.style.color = 'var(--text-dim)';
+        }
+        [...langs].sort().forEach(l => {
+          const opt = document.createElement('option');
+          opt.value = l; opt.textContent = l;
+          langFilter.appendChild(opt);
+        });
+        applyColVisibility();
+        if (searchBox.value.trim()) {
+          doSearch();
+        } else {
+          thead.innerHTML = '';
+          tbody.innerHTML = `<tr><td colspan="20"><div class="empty-state">
+            <div class="icon">📡</div>
+            <p>Enter a frequency to search</p>
+          </div></td></tr>`;
+        }
+      };
+      reader.readAsText(file);
+    });
+
+    // Standard comma-delimited CSV parser (handles quoted fields)
+    function parseCSVLine(line) {
+      const fields = [];
+      let cur = '', inQ = false;
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (inQ) {
+          if (c === '"') {
+            if (line[i+1] === '"') { cur += '"'; i++; }
+            else inQ = false;
+          } else { cur += c; }
+        } else {
+          if (c === '"') inQ = true;
+          else if (c === ',') { fields.push(cur); cur = ''; }
+          else cur += c;
+        }
+      }
+      fields.push(cur);
+      return fields;
+    }
+
+    function parseCSV(text) {
+      return text.split(/\r?\n/).filter(l => l.trim()).map(parseCSVLine);
+    }
+
+    // Semicolon-delimited EiBi parser — maps to standard layout
+    // Standard layout: Frequency, Mode, Station, On, Off, Language, Site, TX Country, Days, Target, Power, Azimuth, Origin, Source
+    // Remarks = transmitter site code → Site. P/Start/Stop dropped.
+    function parseSkedFormat(text) {
+      const lines = text.split(/\r?\n/).filter(l => l.trim());
+      // Strip :width suffixes from header
+      const rawHeaders = lines[0].split(';').map(h => h.split(':')[0].trim()).filter(h => h);
+
+      // Standard layout header row
+      const outHeaders = ['Frequency','Mode','Station','On','Off','Language','Site','TX Country','Days','Target','Power','Azimuth','Origin','Source'];
+      const rows = [outHeaders];
+
+      for (let i = 1; i < lines.length; i++) {
+        const cols = lines[i].split(';');
+        const get = (name) => {
+          const idx = rawHeaders.indexOf(name);
+          return idx !== -1 && idx < cols.length ? cols[idx].trim() : '';
+        };
+
+        const freq = get('kHz');
+        if (!freq) continue;
+
+        // Split Time(UTC) into On and Off
+        const time = get('Time(UTC)');
+        const timeParts = time.split('-');
+        const on  = timeParts[0] || '';
+        const off = timeParts[1] || '';
+
+        // Format frequency to Hz internally
+        const freqHz = String(Math.round(parseFloat(freq) * 1000));
+
+        // Language: decode special codes
+        const rawLng = get('Lng');
+        const SPECIAL_LANG = {
+          '-CW': 'Morse', '-EC': 'Empty Carrier', '-HF': 'HFDL',
+          '-MX': 'Music', '-TS': 'Time Signal', '-TY': 'Teletype'
+        };
+        const language = SPECIAL_LANG[rawLng] || rawLng;
+
+        rows.push([
+          freqHz,            // Frequency in Hz
+          '',                // Mode — not in sked
+          get('Station'),    // Station
+          on,                // On
+          off,               // Off
+          language,          // Language — special codes decoded
+          '',                            // Site — not in sked
+          decodeSkedSite(get('Remarks'), get('ITU')),  // TX Country — decoded from Remarks + ITU
+          get('Days'),       // Days
+          decodeTarget(get('Target')),  // Target — decoded
+          '',                // Power — not in sked
+          '',                // Azimuth — not in sked
+          ITU_COUNTRIES[get('ITU')] || get('ITU'),  // Origin — decoded from ITU code
+          'EiBi',            // Source
+        ]);
+      }
+      return rows;
+    }
+
+    // s1b format: Frequency(Hz), Ignore, Mode, Site, UTC, Ignore, Ignore, Ignore
+    function parseS1bFormat(text) {
+      const outHeaders = ['Frequency','Mode','Station','On','Off','Language','Site','TX Country','Days','Target','Power','Azimuth','Origin','Source'];
+      const rows = [outHeaders];
+
+      const lines = text.split(/\r?\n/);
+      for (let i = 0; i < lines.length; i++) {
+        const cols = lines[i].split(',');
+        const freq = cols[0].trim().replace(/^\uFEFF/, '');
+        if (!freq || isNaN(parseFloat(freq))) continue;
+
+        const mode    = cols[2] ? cols[2].trim() : '';
+        const station = cols[3] ? cols[3].trim() : '';
+        const utc     = cols[4] ? cols[4].trim() : '';
+        const timeParts = utc.split('-');
+        const on  = timeParts[0] || '';
+        const off = timeParts[1] || '';
+        const freqHz = String(parseFloat(freq));
+
+        rows.push([
+          freqHz,    // Frequency in Hz
+          mode,      // [2]  Mode
+          station,   // [3]  Station
+          on,        // [4]  On
+          off,       // [5]  Off
+          '',        // [6]  Language — not in s1b
+          '',        // [7]  Site — not in s1b
+          '',        // [8]  TX Country — not in s1b
+          '',        // [9]  Days — not in s1b
+          '',        // [10] Target — not in s1b
+          '',        // [11] Power — not in s1b
+          '',        // [12] Azimuth — not in s1b
+          '',        // [13] Origin — not in s1b
+          's1b',     // [14] Source
+        ]);
+      }
+      return rows;
+    }
+
+    // AOKI fixed-width format parser — maps to standard 14-column internal layout.
+    // Column positions derived from the AOKI B25 header line.
+    // Lat/Lon dropped. Mode and Target not present in AOKI. Remarks mapped to Origin column.
+    function parseAokiFormat(text) {
+      const outHeaders = ['Frequency','Mode','Station','On','Off','Language','Site','TX Country','Days','Target','Power','Azimuth','Remarks','Source'];
+      const rows = [outHeaders];
+
+      const lines = text.split(/\r?\n/);
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // Skip title line, header line, and blank lines
+        if (!line.trim() || line.trimStart().startsWith('FRE') || line.trimStart().startsWith('B25')) continue;
+        if (line.length < 50) continue;
+
+        const freq    = line.slice(0, 6).trim();
+        if (!freq || isNaN(parseFloat(freq))) continue;
+
+        const station  = line.slice(6,  38).trim();
+        const utc      = line.slice(38, 48).trim();
+        const days     = line.slice(48, 56).trim();
+        const language = line.slice(56, 77).trim();
+        const power    = line.slice(77, 81).trim();
+        const azimuth  = line.slice(81, 85).trim();
+        const location = line.slice(85, 109).trim();
+        const adm      = line.slice(109, 113).trim();
+        const remarks  = line.length > 129 ? line.slice(129).trim() : '';
+
+        const timeParts = utc.split('-');
+        const on  = timeParts[0] ? timeParts[0].trim() : '';
+        const off = timeParts[1] ? timeParts[1].trim() : '';
+
+        // Frequency stored as Hz internally
+        const freqHz = String(parseFloat(freq) * 1000);
+
+        rows.push([
+          freqHz,    // [0]  Frequency (Hz)
+          '',        // [1]  Mode — not in AOKI
+          station,   // [2]  Station
+          on,        // [3]  On
+          off,       // [4]  Off
+          language,  // [5]  Language
+          location,  // [6]  Site
+          ITU_COUNTRIES[adm] || adm,  // [7]  TX Country — decoded from ITU code
+          days,      // [8]  Days
+          '',        // [9]  Target — not in AOKI
+          power,     // [10] Power
+          azimuth,   // [11] Azimuth
+          remarks,   // [12] Remarks → Origin column
+          'Aoki',    // [13] Source
+        ]);
+      }
+      return rows;
+    }
+
+    // Decode EiBi Remarks + ITU fields into a readable TX country string
+    // blank        → "Russia"          (main/only home site — country from ITU)
+    // s            → "Russia-s"        (named home site — country from ITU)
+    // /RUS-s       → "Russia-s relay"  (foreign relay)
+    // /G-w         → "United Kingdom-w relay"
+    function decodeSkedSite(remarks, itu) {
+      const homeCountry = ITU_COUNTRIES[itu] || itu || '';
+      if (!remarks) return homeCountry;
+      if (remarks.startsWith('/')) {
+        const inner = remarks.slice(1);
+        const dashIdx = inner.indexOf('-');
+        const ituCode = dashIdx !== -1 ? inner.slice(0, dashIdx) : inner;
+        const country = ITU_COUNTRIES[ituCode] || ituCode;
+        return country + ' relay';
+      }
+      // Plain site letter(s) — home country transmitter, just show country
+      return homeCountry;
+    }
+
+
+    // Decode EiBi Target field
+    // Fixed codes: Eu, ME, FE, Glo, CIS, Car, Cau, Sib, Tib, SEA, SEE, ENA, CNA, WNA, NAO, SAO, WIO, LAm, In
+    // Compound: C/E/N/S/W + region suffix (Af, Am, As, Eu, Oc, In)
+    // Otherwise: ITU country code lookup, or raw value
+    const TARGET_FIXED = {
+      "Af": "Africa", "Am": "Americas", "As": "Asia", "Eu": "Europe", "Oc": "Oceania",
+      "In": "Indian subcontinent", "FE": "Far East", "ME": "Middle East", "Glo": "Global",
+      "CIS": "CIS (Former Soviet Union)", "Car": "Caribbean", "Cau": "Caucasus",
+      "Sib": "Siberia", "Tib": "Tibet", "SEA": "South East Asia", "SEE": "South East Europe",
+      "ENA": "Eastern North America", "CNA": "Central North America", "WNA": "Western North America",
+      "NAO": "North Atlantic Ocean", "SAO": "South Atlantic Ocean", "WIO": "Western Indian Ocean",
+      "LAm": "Latin America", "NE": "Northeast", "NW": "Northwest", "SE": "Southeast",
+      "SW": "Southwest", "ENE": "East-northeast", "ESE": "East-southeast",
+      "NNE": "North-northeast", "NNW": "North-northwest", "SSE": "South-southeast",
+      "SSW": "South-southwest", "WNW": "West-northwest", "WSW": "West-southwest",
+      "Tas": "Tasmania"
+    };
+    const TARGET_REGIONS = {
+      "Af": "Africa", "Am": "Americas", "As": "Asia", "Eu": "Europe",
+      "Oc": "Oceania", "In": "Indian subcontinent"
+    };
+    const TARGET_DIRS = { "C": "Central", "E": "East", "N": "North", "S": "South", "W": "West" };
+
+    function decodeTarget(code) {
+      if (!code) return '';
+      if (TARGET_FIXED[code]) return TARGET_FIXED[code];
+      // Compound: first letter is direction, rest is region
+      const dir = TARGET_DIRS[code[0]];
+      if (dir) {
+        const region = TARGET_REGIONS[code.slice(1)];
+        if (region) return dir + ' ' + region;
+      }
+      // ITU country code
+      if (ITU_COUNTRIES[code]) return ITU_COUNTRIES[code];
+      return code;
+    }
+
+    // Convert frequency from internal Hz storage to display kHz with 3 decimal places
+    function formatFreq(val) {
+      const n = parseFloat(val);
+      return isNaN(n) ? val : (n / 1000).toFixed(3);
+    }
+
+    // Render filtered rows into the table. highlight=true shows result count,
+    // highlight=false shows loaded row count. Rows are rendered in batches
+    // of 150 using requestAnimationFrame to avoid blocking the UI on large datasets.
+    function renderRows(rows, highlight) {
+      if (renderRaf) cancelAnimationFrame(renderRaf);
+      thead.innerHTML = '';
+      tbody.innerHTML = '';
+
+      if (!rows.length || rows.length === 1) {
+        tbody.innerHTML = `<tr><td colspan="20"><div class="empty-state">
+          <div class="icon">🔍</div><p>No matching stations found</p>
+        </div></td></tr>`;
+        return;
+      }
+
+      // Map abbreviated column names from some file formats to friendly display names
+      const headerMap = {
+        'M':         'Mode',
+        'Pwr':       'Power',
+        'Azi':       'Azimuth',
+        'Org_Country': 'Origin',
+        'TX_Country':  'TX Country'
+      };
+
+      const hr = thead.insertRow();
+      rows[0].forEach((col, i) => {
+        const th = document.createElement('th');
+        const label = i === 0 ? 'Frequency' : (headerMap[col.trim()] || col);
+        if (sortableCols[i]) {
+          th.classList.add('sortable');
+          const arrow = document.createElement('span');
+          arrow.className = 'sort-arrow';
+          if (sortCol === i) {
+            th.classList.add(sortDir === 1 ? 'sort-asc' : 'sort-desc');
+            arrow.textContent = sortDir === 1 ? '↑' : '↓';
+          } else {
+            arrow.textContent = '↑↓';
+          }
+          th.textContent = label;
+          th.appendChild(arrow);
+          th.addEventListener('click', () => {
+            if (sortCol === i) { sortDir *= -1; }
+            else { sortCol = i; sortDir = 1; }
+            doSearch();
+          });
+        } else {
+          th.textContent = label;
+        }
+        hr.appendChild(th);
+      });
+
+      let idx = 1;
+      // Render 150 rows per animation frame to keep the UI responsive
+      function batch() {
+        const frag = document.createDocumentFragment();
+        const end  = Math.min(idx + 150, rows.length);
+        for (; idx < end; idx++) {
+          const tr = document.createElement('tr');
+          const rowFreq = rows[idx][0];
+          const rowMode = rows[idx][1];
+          tr.addEventListener('dblclick', () => {
+            if (trackMode) return;
+            if (ws && ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ event_type: 'set_property', property: 'device_vfo_frequency', value: rowFreq }));
+              const validModes = ['AM','USB','LSB','CW','SAM','NFM','WFM'];
+              if (rowMode && validModes.includes(rowMode.trim().toUpperCase())) {
+                ws.send(JSON.stringify({ event_type: 'set_property', property: 'demodulator', value: rowMode.trim().toUpperCase() }));
+              }
+            }
+          });
+          rows[idx].forEach((col, i) => {
+            const td = document.createElement('td');
+            td.textContent = i === 0 ? formatFreq(col) : col;
+            tr.appendChild(td);
+          });
+          frag.appendChild(tr);
+        }
+        tbody.appendChild(frag);
+        if (idx < rows.length) {
+          statusText.textContent = `Rendering… ${idx}/${rows.length}`;
+          renderRaf = requestAnimationFrame(batch);
+        } else {
+          statusText.textContent = highlight
+            ? `Showing ${rows.length - 1} result${rows.length - 1 !== 1 ? 's' : ''}`
+            : `Loaded · ${rows.length - 1} rows`;
+          applyColVisibility();
+        }
+      }
+      batch();
+    }
+
+    // Main search function. Applies filters in this order:
+    // 1. Frequency (exact/prefix/range)
+    // 2. Now On (on-air time check)
+    // 3. Source filter
+    // 4. Language filter (exact match or __word_all__ group match)
+    // 5. Station name substring match
+    // 6. Column sort
+    function doSearch() {
+      if (!allRows.length) return;
+      if (renderRaf) cancelAnimationFrame(renderRaf);
+      const q = searchBox.value.trim();
+      if (!q) {
+        matchPill.style.display = 'none';
+        thead.innerHTML = '';
+        tbody.innerHTML = `<tr><td colspan="20"><div class="empty-state">
+          <div class="icon">📡</div>
+          <p>Enter a frequency to search</p>
+        </div></td></tr>`;
+        return;
+      }
+
+      const t0 = performance.now();
+      let filtered;
+
+      if (searchMode === 'range') {
+        const parts = q.split('-').map(s => s.trim());
+        if (parts.length === 2) {
+          const lo = parseFloat(parts[0]) * 1000;
+          const hi = parseFloat(parts[1]) * 1000;
+          filtered = allRows.filter((row, i) => {
+            if (i === 0) return true;
+            const v = parseFloat(row[0]);
+            return !isNaN(v) && v >= lo && v <= hi;
+          });
+        } else { filtered = [allRows[0]]; }
+      } else if (searchMode === 'prefix') {
+        const p = q.replace(/\s/g, '');
+        filtered = allRows.filter((row, i) => {
+          if (i === 0) return true;
+          const displayed = formatFreq(row[0]);
+          return displayed.startsWith(p);
+        });
+      } else {
+        // exact match — input is kHz, stored is Hz, tolerance ±2 kHz
+        const inputHz = parseFloat(q) * 1000;
+        filtered = allRows.filter((row, i) => {
+          if (i === 0) return true;
+          const v = parseFloat(row[0]);
+          return !isNaN(v) && Math.abs(v - inputHz) < 2000;
+        });
+      }
+
+      const ms  = (performance.now() - t0).toFixed(1);
+
+      // Apply Now On filter if active (On=index 3, Off=index 4)
+      if (nowOn) {
+        filtered = filtered.filter((row, i) => {
+          if (i === 0) return true;
+          if (!row[0] || !row[0].trim()) return false;
+          return isOnAir(row[3], row[4]);
+        });
+      }
+
+      // Apply source filter
+      const srcFilter = document.getElementById('srcFilter');
+      if (!srcFilter.disabled && srcFilter.value) {
+        filtered = filtered.filter((row, i) => {
+          if (i === 0) return true;
+          return row[13] && row[13].trim() === srcFilter.value;
+        });
+      }
+      // Language filter: __word_all__ sentinel matches any language containing
+      // the word (e.g. __english_all__ matches English, English/French, etc.)
+      const selectedLang = document.getElementById('langFilter').value;
+      if (selectedLang) {
+        const allMatch = selectedLang.match(/^__(.+)_all__$/);
+        if (allMatch) {
+          const word = allMatch[1];
+          filtered = filtered.filter((row, i) => {
+            if (i === 0) return true;
+            return row[5] && row[5].toLowerCase().includes(word);
+          });
+        } else {
+          filtered = filtered.filter((row, i) => {
+            if (i === 0) return true;
+            return row[5] && row[5].trim() === selectedLang;
+          });
+        }
+      }
+
+      // Apply station filter
+      const stationQ = document.getElementById('stationBox').value.trim().toLowerCase();
+      if (stationQ) {
+        filtered = filtered.filter((row, i) => {
+          if (i === 0) return true;
+          return row[2] && row[2].toLowerCase().includes(stationQ);
+        });
+      }
+
+      matchPill.textContent = `Search time - ${ms}ms`;
+      matchPill.className   = 'pill ' + (filtered.length - 1 > 0 ? 'green' : 'red');
+      matchPill.style.display = '';
+
+      // Apply column sort if active
+      if (sortCol >= 0 && filtered.length > 1) {
+        const header  = filtered[0];
+        const numeric = sortableCols[sortCol] === 'num';
+        const data    = filtered.slice(1).sort((a, b) => {
+          if (numeric) {
+            const av = parseFloat(a[sortCol]) || 0;
+            const bv = parseFloat(b[sortCol]) || 0;
+            return (av - bv) * sortDir;
+          } else {
+            const av = (a[sortCol] || '').trim().toLowerCase();
+            const bv = (b[sortCol] || '').trim().toLowerCase();
+            return av < bv ? -sortDir : av > bv ? sortDir : 0;
+          }
+        });
+        filtered = [header, ...data];
+      }
+
+      renderRows(filtered, true);
+    }
+
+    // Hotkeys: F = frequency search, S = station search
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const overlay = document.getElementById('helpOverlay');
+        if (overlay.style.display === 'flex') { toggleHelp(); return; }
+      }
+      const tag = document.activeElement.tagName.toLowerCase();
+      if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+      if (e.key === 'f' || e.key === 'F') {
+        e.preventDefault();
+        const box = document.getElementById('searchBox');
+        box.focus();
+        box.select();
+      } else if (e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        const box = document.getElementById('stationBox');
+        box.focus();
+        box.select();
+      }
+    });
+
+    // Update the UTC and local clock display every second
+    function updateClock() {
+      const now = new Date();
+      const utc = now.toUTCString().match(/(\d{2}:\d{2}:\d{2})/)[1];
+      const local = now.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false});
+      document.getElementById('clockDisplay').innerHTML =
+        `UTC: ${utc}<br>Local: ${local}`;
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    searchBox.addEventListener('input', () => {
+      if (searchMode === 'exact') return;
+      clearTimeout(debounceId);
+      debounceId = setTimeout(doSearch, 200);
+    });
+
+    document.getElementById('stationBox').addEventListener('input', () => {
+      clearTimeout(debounceId);
+      debounceId = setTimeout(doSearch, 200);
+    });
+
+    document.getElementById('stationBox').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        clearTimeout(debounceId);
+        doSearch();
+        document.getElementById('stationBox').blur();
+      } else if (e.key === 'Escape') {
+        document.getElementById('stationBox').blur();
+      }
+    });
+
+    searchBox.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        clearTimeout(debounceId);
+        doSearch();
+        searchBox.blur();
+      } else if (e.key === 'Escape') {
+        searchBox.blur();
+      }
+    });
+
+    // WebSocket connection management — connect, disconnect, and message handling
+    let ws = null;
+    let currentVfo = '';
+
+    function wsSetStatus(state) {
+      const el = document.getElementById('connectionStatus');
+      el.className = 'connection-status ' + state;
+      el.textContent =
+        state === 'connected'    ? '● Connected'    :
+        state === 'connecting'   ? '● Connecting…'  :
+                                   '● Disconnected';
+    }
+
+    function wsSetError(msg) {
+      const el = document.getElementById('errorMessage');
+      if (msg) { el.textContent = msg; el.classList.add('show'); }
+      else      { el.textContent = ''; el.classList.remove('show'); }
+    }
+
+    function wsToggleConnection() {
+      if (ws && ws.readyState !== WebSocket.CLOSED) {
+        ws.close();
+        return;
+      }
+      const ip   = document.getElementById('ipAddress').value.trim();
+      const port = document.getElementById('portSelect').value;
+      if (!ip) { wsSetError('Please enter a valid IP address.'); return; }
+      wsSetError('');
+      wsSetStatus('connecting');
+      const btn = document.getElementById('connectBtn');
+      btn.textContent = 'Disconnect';
+      btn.classList.add('disconnect');
+
+      try {
+        ws = new WebSocket(`ws://${ip}:${port}`);
+
+        ws.onopen = () => {
+          wsSetStatus('connected');
+          wsSetError('');
+          ws.send(JSON.stringify({ event_type: 'get_property', property: 'device_vfo_frequency', value: '' }));
+          updateTrackBtn();
+        };
+
+        ws.onclose = () => {
+          wsSetStatus('disconnected');
+          btn.textContent = 'Connect';
+          btn.classList.remove('disconnect');
+          ws = null;
+          currentVfo = '';
+          document.getElementById('vfoPill').style.display = 'none';
+          document.getElementById('webSearch1Btn').disabled = true;
+          document.getElementById('webSearch2Btn').disabled = true;
+          updateTrackBtn();
+        };
+
+        ws.onerror = () => {
+          wsSetError('Connection failed. Check IP/port and try again.');
+          wsSetStatus('disconnected');
+          btn.textContent = 'Connect';
+          btn.classList.remove('disconnect');
+          ws = null;
+          currentVfo = '';
+          document.getElementById('vfoPill').style.display = 'none';
+          document.getElementById('webSearch1Btn').disabled = true;
+          document.getElementById('webSearch2Btn').disabled = true;
+          updateTrackBtn();
+        };
+
+        ws.onmessage = (e) => {
+          try {
+            const msg = JSON.parse(e.data);
+            if ((msg.event_type === 'property_changed' || msg.event_type === 'get_property_response')
+                && msg.property === 'device_vfo_frequency') {
+              const hz  = parseFloat(msg.value);
+              const khz = (hz / 1000).toFixed(3);
+              currentVfo = khz;
+              const vfoPill = document.getElementById('vfoPill');
+              vfoPill.textContent = `SDR VFO: ${currentVfo} kHz`;
+              vfoPill.style.display = '';
+              document.getElementById('webSearch1Btn').disabled = false;
+              document.getElementById('webSearch2Btn').disabled = false;
+              if (msg.event_type === 'get_property_response' && !trackMode && !fetchPending) {
+                searchBox.value = Math.round(hz / 1000);
+                return;
+              }
+              if (!trackMode && !fetchPending) return;
+              fetchPending = false;
+              searchBox.value = khz;
+              setMode('exact');
+              if (trackMode) doSearch();
+            }
+          } catch(err) {
+            // ignore non-JSON messages e.g. binary or malformed WebSocket frames
+          }
+        };
+
+      } catch (err) {
+        wsSetError('Invalid address: ' + err.message);
+        wsSetStatus('disconnected');
+        btn.textContent = 'Connect';
+        btn.classList.remove('disconnect');
+        ws = null;
+      }
+    }
+    // End WebSocket connection management
+  </script>
+</body>
+</html>
