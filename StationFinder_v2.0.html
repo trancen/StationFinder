@@ -434,7 +434,6 @@
         <select id="programSelect" class="ip-input" onchange="onProgramChange()">
           <option value="">Select Protocol</option>
           <option value="sdrconnect">WebSocket</option>
-          <option value="tci">TCI</option>
           <option value="catcom">CAT (COM port)</option>
           <option value="icomciv">CAT (Icom rig)</option>
         </select>
@@ -2108,9 +2107,6 @@
                   setTimeout(() => civSend(civFrame(0x06, [modeCode, filterCode])), 100);
                 }
               }
-            } else if (ws && ws.readyState === WebSocket.OPEN && connMode === 'tci') {
-              tciLog('ROW DBLCLICK', { rowFreq, rowMode });
-              tciSetFreqMode(rowFreq, rowMode && validModes.includes(rowMode.trim().toUpperCase()) ? rowMode.trim().toUpperCase() : '');
             } else if (ws && ws.readyState === WebSocket.OPEN) {
               ws.send(JSON.stringify({ event_type: 'set_property', property: 'device_vfo_frequency', value: rowFreq }));
               if (rowMode && validModes.includes(rowMode.trim().toUpperCase())) {
@@ -2560,13 +2556,6 @@
         connMode = 'ws';
         ipBox.style.display   = '';
         portBox.style.display = '';
-        if (!portBox.value) portBox.value = '5454';
-        connectBtn.disabled   = false;
-      } else if (prog === 'tci') {
-        connMode = 'tci';
-        ipBox.style.display   = '';
-        portBox.style.display = '';
-        portBox.value = '40001';
         connectBtn.disabled   = false;
       } else if (prog === 'catcom') {
         connMode = 'cat';
@@ -2590,8 +2579,6 @@
         catToggleConnection();
       } else if (connMode === 'civ') {
         civToggleConnection();
-      } else if (connMode === 'tci') {
-        tciToggleConnection();
       } else {
         wsToggleConnection();
       }
@@ -2887,133 +2874,6 @@
       const el = document.getElementById('errorMessage');
       if (msg) { el.textContent = msg; el.classList.add('show'); }
       else      { el.textContent = ''; el.classList.remove('show'); }
-    }
-
-    function tciLog(...args) {
-      console.log('[TCI]', ...args);
-    }
-
-    function tciSend(cmd) {
-      tciLog('SEND', cmd);
-      ws.send(cmd);
-    }
-
-    function tciNormalizeMode(mode) {
-      const m = String(mode || '').trim().toUpperCase();
-      const map = {
-        'AM': 'AM', 'USB': 'USB', 'LSB': 'LSB',
-        'CW': 'CW', 'CWR': 'CW', 'CWU': 'CW', 'CWL': 'CW',
-        'FM': 'FM', 'NFM': 'FM', 'WFM': 'WFM',
-        'DIGI': 'DIGU', 'DIGU': 'DIGU', 'DIGL': 'DIGL'
-      };
-      return map[m] || '';
-    }
-
-    function tciRequestFreq() {
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
-      try { tciSend('vfo:0;'); } catch (e) { tciLog('SEND ERROR', e); }
-    }
-
-    function tciSetFreqMode(freqHz, mode) {
-      if (!ws || ws.readyState !== WebSocket.OPEN) return;
-      const f = Math.round(parseFloat(freqHz || 0));
-      if (!f) return;
-      try {
-        tciLog('Tune request', { freqHz: f, command: `dds:0,${f};`, mode });
-        // ka9q_ubersdr TCI expects: dds:receiver,frequency (NOT dds:receiver,vfo,freq!)
-        // Correct format is dds:0,frequency (no extra vfo/0 before frequency)
-        tciSend(`dds:0,${f};`);
-        const m = tciNormalizeMode(mode);
-        if (m) setTimeout(() => {
-          if (ws && ws.readyState === WebSocket.OPEN && connMode === 'tci') {
-            try { tciSend(`modulation:0,${m};`); } catch (e) { tciLog('SEND ERROR', e); }
-          }
-        }, 80);
-      } catch (e) {}
-    }
-
-    function tciHandleMessage(raw) {
-      const msg = String(raw || '').trim();
-      tciLog('RECV', msg);
-      if (!msg) return;
-      if (msg.toLowerCase().includes('ready;')) {
-        tciRequestFreq();
-        return;
-      }
-      const vfoMatch = msg.match(/^vfo:0;$/i);
-      const ddsMatch = msg.match(/^dds:0,(\d+);$/i);
-      if (ddsMatch) {
-        // DDS response with frequency
-        const hz = parseFloat(ddsMatch[1]);
-        const khz = (hz / 1000).toFixed(3);
-        currentVfo = khz;
-        const vfoPill = document.getElementById('vfoPill');
-        vfoPill.textContent = `SDR VFO: ${currentVfo} kHz`;
-        vfoPill.style.display = '';
-        if (!trackMode && !fetchPending) return;
-        fetchPending = false;
-        searchBox.value = khz;
-        setMode('exact');
-        if (trackMode) doSearch();
-      } else if (vfoMatch) {
-        // Just a VFO query response - not much to do
-        tciLog('VFO query response - use dds to set');
-      }
-    }
-
-    function tciToggleConnection() {
-      if (ws && ws.readyState !== WebSocket.CLOSED) {
-        ws.close();
-        return;
-      }
-      const ip   = document.getElementById('ipAddress').value.trim();
-      const port = document.getElementById('portSelect').value.trim() || '40001';
-      if (!ip) { wsSetError('Please enter a valid IP address.'); return; }
-      wsSetError('');
-      wsSetStatus('connecting');
-      const btn = document.getElementById('connectBtn');
-      btn.textContent = 'Disconnect';
-      btn.classList.add('disconnect');
-
-      try {
-        tciLog('CONNECT', `ws://${ip}:${port}`);
-        ws = new WebSocket(`ws://${ip}:${port}`);
-
-        ws.onopen = () => {
-          tciLog('OPEN');
-          wsSetStatus('connected');
-          wsSetError('');
-          document.getElementById('programSelect').disabled = true;
-          document.getElementById('baudRate').disabled = true;
-          document.getElementById('ipAddress').disabled = true;
-          document.getElementById('portSelect').disabled = true;
-          updateTrackBtn();
-          setTimeout(() => tciRequestFreq(), 200);
-        };
-
-        ws.onclose = (ev) => {
-          tciLog('CLOSE', { code: ev.code, reason: ev.reason, wasClean: ev.wasClean });
-          wsSetStatus('disconnected');
-          btn.textContent = 'Connect';
-          btn.classList.remove('disconnect');
-          document.getElementById('programSelect').disabled = false;
-          document.getElementById('baudRate').disabled = false;
-          document.getElementById('ipAddress').disabled = false;
-          document.getElementById('portSelect').disabled = false;
-          ws = null;
-          currentVfo = '';
-          document.getElementById('vfoPill').style.display = 'none';
-          updateTrackBtn();
-        };
-
-        ws.onmessage = (e) => tciHandleMessage(e.data);
-        ws.onerror = (e) => { tciLog('ERROR', e); wsSetError('TCI socket error - check browser console'); };
-      } catch (err) {
-        wsSetError('Invalid address: ' + err.message);
-        wsSetStatus('disconnected');
-        btn.textContent = 'Connect';
-        btn.classList.remove('disconnect');
-      }
     }
 
     function wsToggleConnection() {
